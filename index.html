@@ -622,7 +622,7 @@
   </div>
 
   <div class="calib-instruction">
-    各ポイントを見つめながらクリックしてください &nbsp;·&nbsp; CLICK WHILE LOOKING AT EACH POINT
+    光る点を見つめながらクリック &nbsp;·&nbsp; 点が見えない場合はその位置を見てどこでもクリック
   </div>
 </div>
 
@@ -748,44 +748,48 @@
     pips.innerHTML = '';
 
     CALIB_POSITIONS.forEach((pos, i) => {
-      // Pip
       const pip = document.createElement('div');
       pip.className = 'calib-pip' + (i === 0 ? ' active' : '');
       pip.id = `pip-${i}`;
       pips.appendChild(pip);
-
-      // Point
-      const pt = document.createElement('div');
-      pt.className = 'calib-point' + (i === 0 ? '' : ' hidden');
-      pt.id = `calib-pt-${i}`;
-      pt.style.left = `${pos[0]}%`;
-      pt.style.top  = `${pos[1]}%`;
-      pt.innerHTML = `<div class="calib-ring"></div><div class="calib-core"></div>`;
-
-      pt.addEventListener('click', () => onCalibClick(i, pt));
-      overlay.appendChild(pt);
     });
+
+    showCalibPoint(0);
+
+    // 画面全体のクリックでキャリブレーション
+    overlay.addEventListener('click', onOverlayClick);
   }
 
-  function onCalibClick(i, el) {
-    if (el.classList.contains('clicked')) return;
-    el.classList.add('clicked');
-    document.getElementById(`pip-${i}`).classList.replace('active', 'done');
+  function showCalibPoint(i) {
+    const overlay = document.getElementById('calib-overlay');
+    // 既存の点を削除
+    const old = document.getElementById('current-calib-pt');
+    if (old) old.remove();
 
+    const pos = CALIB_POSITIONS[i];
+    const pt = document.createElement('div');
+    pt.className = 'calib-point';
+    pt.id = 'current-calib-pt';
+    pt.style.left = `${pos[0]}%`;
+    pt.style.top  = `${pos[1]}%`;
+    pt.innerHTML = `<div class="calib-ring"></div><div class="calib-core"></div>`;
+    overlay.appendChild(pt);
+  }
+
+  function onOverlayClick(e) {
+    const i = calibCount;
     calibCount++;
     document.getElementById('calib-count').textContent = `${calibCount} / 9`;
-
-    setTimeout(() => {
-      el.classList.add('hidden');
-      if (i + 1 < CALIB_POSITIONS.length) {
-        const next = document.getElementById(`calib-pt-${i + 1}`);
-        next.classList.remove('hidden');
-        document.getElementById(`pip-${i + 1}`).classList.add('active');
-      } else {
-        // Done!
-        setTimeout(startTracking, 500);
-      }
-    }, 400);
+    document.getElementById(`pip-${i}`).classList.replace('active', 'done');
+    if (i + 1 < CALIB_POSITIONS.length) {
+      document.getElementById(`pip-${i + 1}`)?.classList.add('active');
+      showCalibPoint(i + 1);
+    } else {
+      const old = document.getElementById('current-calib-pt');
+      if (old) old.remove();
+      document.getElementById('calib-overlay').removeEventListener('click', onOverlayClick);
+      setTimeout(startTracking, 500);
+    }
   }
 
   // ─── Timer ────────────────────────────────────────────
