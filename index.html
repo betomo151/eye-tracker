@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EYE TRACKER — WebGazer</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #04040a;
+    --surface: #0c0c18;
+    --border: #1a1a2e;
+    --cyan: #00e5ff;
+    --cyan-dim: rgba(0,229,255,0.15);
+    --green: #00ff88;
+    --amber: #ffb800;
+    --red: #ff3860;
+    --text: #b8c8d8;
+    --dim: #3a4a5a;
+    --glow-cyan: 0 0 12px rgba(0,229,255,0.7), 0 0 30px rgba(0,229,255,0.3);
+    --glow-green: 0 0 12px rgba(0,255,136,0.7), 0 0 30px rgba(0,255,136,0.3);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+  }
+
+  /* Scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg,
+      transparent, transparent 3px,
+      rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px);
+    pointer-events: none;
+    z-index: 9997;
+  }
+
+  /* Grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── SCREENS ─────────────────────────────────── */
+  .screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: opacity 0.4s ease;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+
+  /* ─── WELCOME SCREEN ──────────────────────────── */
+  #welcome {
+    flex-direction: column;
+    gap: 0;
+    background: var(--bg);
+  }
+
+  .welcome-inner {
+    position: relative;
+    border: 1px solid rgba(0,229,255,0.2);
+    padding: 48px 56px;
+    max-width: 580px;
+    width: 90%;
+    background: var(--surface);
+  }
+
+  .welcome-inner::before,
+  .welcome-inner::after {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    border-color: var(--cyan);
+    border-style: solid;
+  }
+  .welcome-inner::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .welcome-inner::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  .tag {
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    opacity: 0.7;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  .welcome-title {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1;
+    color: #fff;
+    text-shadow: var(--glow-cyan);
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+  }
+
+  .welcome-sub {
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 3px;
+    margin-bottom: 32px;
+    opacity: 0.8;
+  }
+
+  .welcome-desc {
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--dim);
+    margin-bottom: 36px;
+    border-left: 2px solid rgba(0,229,255,0.2);
+    padding-left: 16px;
+  }
+
+  .step-list {
+    list-style: none;
+    margin-bottom: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step-list li {
+    font-size: 12px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--cyan);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease;
+    z-index: -1;
+  }
+
+  .btn:hover::before { transform: scaleX(1); }
+  .btn:hover { color: var(--bg); box-shadow: var(--glow-cyan); }
+
+  .btn-red {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .btn-red::before { background: var(--red); }
+  .btn-red:hover { box-shadow: 0 0 12px rgba(255,56,96,0.7); }
+
+  /* ─── CALIBRATION SCREEN ──────────────────────── */
+  #calibration {
+    background: transparent;
+  }
+
+  #calib-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+  }
+
+  .calib-progress {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(4,4,10,0.9);
+    border: 1px solid rgba(0,229,255,0.2);
+    padding: 12px 24px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+  }
+
+  .calib-dots-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .calib-pip {
+    width: 8px; height: 8px;
+    border: 1px solid var(--dim);
+    border-radius: 50%;
+    transition: all 0.3s;
+  }
+  .calib-pip.done { background: var(--green); border-color: var(--green); box-shadow: var(--glow-green); }
+  .calib-pip.active { background: var(--cyan); border-color: var(--cyan); box-shadow: var(--glow-cyan); }
+
+  .calib-point {
+    position: absolute;
+    width: 48px; height: 48px;
+    transform: translate(-50%, -50%);
+    cursor: crosshair;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s;
+  }
+
+  .calib-point.hidden { opacity: 0; pointer-events: none; }
+
+  .calib-ring {
+    position: absolute;
+    width: 48px; height: 48px;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    animation: pulse-ring 1.5s ease-in-out infinite;
+  }
+
+  .calib-core {
+    width: 12px; height: 12px;
+    background: var(--cyan);
+    border-radius: 50%;
+    box-shadow: var(--glow-cyan);
+    position: relative;
+    z-index: 1;
+    transition: transform 0.2s;
+  }
+
+  .calib-point:hover .calib-core { transform: scale(1.4); }
+  .calib-point.clicked .calib-core {
+    background: var(--green);
+    box-shadow: var(--glow-green);
+    animation: burst 0.3s ease forwards;
+  }
+  .calib-point.clicked .calib-ring {
+    border-color: var(--green);
+    animation: burst-ring 0.4s ease forwards;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.4; }
+  }
+  @keyframes burst {
+    0% { transform: scale(1); }
+    50% { transform: scale(2); opacity: 0.5; }
+    100% { transform: scale(0.8); opacity: 0; }
+  }
+  @keyframes burst-ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  .calib-instruction {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-align: center;
+  }
+
+  /* ─── TRACKING SCREEN ─────────────────────────── */
+  #tracking {
+    background: transparent;
+    align-items: flex-start;
+    justify-content: flex-start;
+    pointer-events: none;
+  }
+
+  /* Gaze cursor */
+  #gaze-dot {
+    position: fixed;
+    width: 30px; height: 30px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 9000;
+    transition: left 0.05s linear, top 0.05s linear;
+    display: none;
+  }
+
+  #gaze-dot .dot-ring {
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--cyan);
+    border-radius: 50%;
+    animation: gaze-pulse 1.2s ease-in-out infinite;
+  }
+  #gaze-dot .dot-ring2 {
+    position: absolute;
+    inset: 6px;
+    border: 1px solid rgba(0,229,255,0.4);
+    border-radius: 50%;
+    animation: gaze-pulse 1.2s ease-in-out infinite reverse;
+  }
+  #gaze-dot .dot-core {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 6px; height: 6px;
+    background: var(--cyan);
+    border-radius: 50%;
+    box-shadow: var(--glow-cyan);
+  }
+
+  @keyframes gaze-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.15); opacity: 0.5; }
+  }
+
+  /* HUD Panel */
+  #hud {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 200;
+    pointer-events: auto;
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    width: 220px;
+  }
+
+  .hud-panel {
+    background: rgba(4,4,10,0.88);
+    border: 1px solid rgba(0,229,255,0.15);
+    padding: 16px;
+    backdrop-filter: blur(8px);
+    position: relative;
+  }
+
+  .hud-panel::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px;
+    width: 10px; height: 10px;
+    border-top: 2px solid var(--cyan);
+    border-left: 2px solid var(--cyan);
+  }
+
+  .hud-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .hud-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: var(--glow-cyan);
+    line-height: 1;
+  }
+
+  .hud-coord-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+  }
+
+  .hud-coord {
+    flex: 1;
+  }
+
+  .hud-coord-label {
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .hud-coord-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    color: var(--green);
+    text-shadow: var(--glow-green);
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: var(--glow-green);
+    animation: blink 1s ease-in-out infinite;
+    margin-right: 8px;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  .status-text {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--green);
+    vertical-align: middle;
+  }
+
+  /* Heatmap canvas */
+  #heatmap-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0.4;
+    display: none;
+  }
+
+  /* Crosshair corners */
+  .corner {
+    position: fixed;
+    width: 30px; height: 30px;
+    border-color: rgba(0,229,255,0.15);
+    border-style: solid;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+  .corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+  .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
+  .corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+
+  /* Stop button */
+  #stop-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 300;
+    pointer-events: auto;
+    display: none;
+  }
+
+  /* Heatmap toggle */
+  #heatmap-btn {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 300;
+    pointer-events: auto;
+    display: none;
+  }
+
+  /* WebGazer video box */
+  #webgazerVideoContainer {
+    position: fixed !important;
+    bottom: 80px !important;
+    right: 24px !important;
+    border: 1px solid rgba(0,229,255,0.3) !important;
+    box-shadow: var(--glow-cyan) !important;
+    z-index: 9999 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Loading overlay */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 9990;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    transition: opacity 0.5s;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+
+  .loader-ring {
+    width: 60px; height: 60px;
+    border: 2px solid rgba(0,229,255,0.1);
+    border-top-color: var(--cyan);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loader-text {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    animation: flicker 2s ease-in-out infinite;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 9000;
+    background: rgba(4,4,10,0.95);
+    border: 1px solid rgba(0,229,255,0.3);
+    padding: 12px 20px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #toast.hidden { opacity: 0; }
+
+  /* elapsed timer */
+  #elapsed {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Corner decorations -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="loader-ring"></div>
+  <div class="loader-text">INITIALIZING WEBGAZER</div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="hidden"></div>
+
+<!-- ─── WELCOME SCREEN ─── -->
+<div class="screen" id="welcome">
+  <div class="welcome-inner">
+    <div class="tag">BROWNHCI / WEBGAZER.JS</div>
+    <h1 class="welcome-title">EYE<br>TRACKER</h1>
+    <div class="welcome-sub">MacBook Camera · Real-time Gaze Prediction</div>
+    <p class="welcome-desc">
+      カメラを使用してリアルタイムの視線追跡を行います。<br>
+      キャリブレーション後、視線位置が画面上に表示されます。
+    </p>
+    <ul class="step-list">
+      <li><span class="step-num">01</span> カメラへのアクセスを許可してください</li>
+      <li><span class="step-num">02</span> 9つのキャリブレーションポイントを順にクリック</li>
+      <li><span class="step-num">03</span> 各ポイントをクリックする間、そこを見つめてください</li>
+      <li><span class="step-num">04</span> 視線追跡がリアルタイムで開始されます</li>
+    </ul>
+    <button class="btn" id="start-btn">▶ START TRACKING</button>
+  </div>
+</div>
+
+<!-- ─── CALIBRATION SCREEN ─── -->
+<div class="screen hidden" id="calibration">
+  <div class="calib-progress">
+    <span style="font-size:9px;letter-spacing:3px;color:var(--dim)">CALIBRATION</span>
+    <div class="calib-dots-row" id="calib-pips"></div>
+    <span id="calib-count" style="font-size:11px">0 / 9</span>
+  </div>
+
+  <div id="calib-overlay">
+    <!-- points injected by JS -->
+  </div>
+
+  <div class="calib-instruction">
+    各ポイントを見つめながらクリックしてください &nbsp;·&nbsp; CLICK WHILE LOOKING AT EACH POINT
+  </div>
+</div>
+
+<!-- ─── TRACKING SCREEN ─── -->
+<div class="screen hidden" id="tracking">
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-panel">
+      <div class="hud-label">STATUS</div>
+      <div>
+        <span class="status-dot"></span>
+        <span class="status-text">TRACKING ACTIVE</span>
+      </div>
+      <div id="elapsed" style="margin-top:8px">00:00</div>
+    </div>
+
+    <div class="hud-panel">
+      <div class="hud-label">GAZE POSITION</div>
+      <div class="hud-coord-row">
+        <div class="hud-coord">
+          <div class="hud-coord-label">X</div>
+          <div class="hud-coord-val" id="gaze-x">---</div>
+        </div>
+        <div class="hud-coord">
+          <div class="hud-coord-label">Y</div>
+          <div class="hud-coord-val" id="gaze-y">---</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-panel">
+      <div class="hud-label">VIEWPORT</div>
+      <div class="hud-coord-row">
+        <div class="hud-coord">
+          <div class="hud-coord-label">W</div>
+          <div class="hud-coord-val" id="vp-w" style="font-size:13px;color:var(--dim)">---</div>
+        </div>
+        <div class="hud-coord">
+          <div class="hud-coord-label">H</div>
+          <div class="hud-coord-val" id="vp-h" style="font-size:13px;color:var(--dim)">---</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <button class="btn btn-red" id="stop-btn">■ STOP</button>
+  <button class="btn" id="heatmap-btn" style="border-color:var(--amber);color:var(--amber)">
+    ◈ HEATMAP
+  </button>
+</div>
+
+<!-- Gaze dot -->
+<div id="gaze-dot">
+  <div class="dot-ring"></div>
+  <div class="dot-ring2"></div>
+  <div class="dot-core"></div>
+</div>
+
+<!-- Heatmap canvas -->
+<canvas id="heatmap-canvas"></canvas>
+
+<!-- MediaPipe assets redirect: fetch & XHR を CDN にリダイレクト -->
+<script>
+  const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/';
+
+  // fetch を上書き
+  const _origFetch = window.fetch;
+  window.fetch = function(url, ...args) {
+    if (typeof url === 'string' && url.includes('mediapipe/face_mesh')) {
+      const filename = url.split('/').pop();
+      url = MEDIAPIPE_CDN + filename;
+    }
+    return _origFetch(url, ...args);
+  };
+
+  // XMLHttpRequest を上書き
+  const _origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    if (typeof url === 'string' && url.includes('mediapipe/face_mesh')) {
+      const filename = url.split('/').pop();
+      url = MEDIAPIPE_CDN + filename;
+    }
+    return _origOpen.call(this, method, url, ...rest);
+  };
+</script>
+<script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+
+<script>
+  // ─── Config ───────────────────────────────────────────
+  window.saveDataAcrossSessions = false;
+
+  const CALIB_POSITIONS = [
+    [10, 10], [50, 10], [90, 10],
+    [10, 50], [50, 50], [90, 50],
+    [10, 90], [50, 90], [90, 90],
+  ];
+
+  // ─── State ────────────────────────────────────────────
+  let calibCount = 0;
+  let trackingActive = false;
+  let startTime = null;
+  let timerInterval = null;
+  let heatmapEnabled = false;
+  let heatmapCtx = null;
+  const gazeDot = document.getElementById('gaze-dot');
+  const heatmapCanvas = document.getElementById('heatmap-canvas');
+
+  // ─── Screens ──────────────────────────────────────────
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('hidden');
+  }
+
+  // ─── Toast ────────────────────────────────────────────
+  function showToast(msg, duration = 2500) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), duration);
+  }
+
+  // ─── Init heatmap canvas ──────────────────────────────
+  function initHeatmap() {
+    heatmapCanvas.width = window.innerWidth;
+    heatmapCanvas.height = window.innerHeight;
+    heatmapCtx = heatmapCanvas.getContext('2d');
+  }
+
+  function drawHeatmapPoint(x, y) {
+    if (!heatmapEnabled || !heatmapCtx) return;
+    const gradient = heatmapCtx.createRadialGradient(x, y, 0, x, y, 40);
+    gradient.addColorStop(0, 'rgba(0, 229, 255, 0.08)');
+    gradient.addColorStop(1, 'rgba(0, 229, 255, 0)');
+    heatmapCtx.fillStyle = gradient;
+    heatmapCtx.beginPath();
+    heatmapCtx.arc(x, y, 40, 0, Math.PI * 2);
+    heatmapCtx.fill();
+  }
+
+  // ─── Calibration ──────────────────────────────────────
+  function buildCalibration() {
+    const overlay = document.getElementById('calib-overlay');
+    const pips = document.getElementById('calib-pips');
+    overlay.innerHTML = '';
+    pips.innerHTML = '';
+
+    CALIB_POSITIONS.forEach((pos, i) => {
+      // Pip
+      const pip = document.createElement('div');
+      pip.className = 'calib-pip' + (i === 0 ? ' active' : '');
+      pip.id = `pip-${i}`;
+      pips.appendChild(pip);
+
+      // Point
+      const pt = document.createElement('div');
+      pt.className = 'calib-point' + (i === 0 ? '' : ' hidden');
+      pt.id = `calib-pt-${i}`;
+      pt.style.left = `${pos[0]}%`;
+      pt.style.top  = `${pos[1]}%`;
+      pt.innerHTML = `<div class="calib-ring"></div><div class="calib-core"></div>`;
+
+      pt.addEventListener('click', () => onCalibClick(i, pt));
+      overlay.appendChild(pt);
+    });
+  }
+
+  function onCalibClick(i, el) {
+    if (el.classList.contains('clicked')) return;
+    el.classList.add('clicked');
+    document.getElementById(`pip-${i}`).classList.replace('active', 'done');
+
+    calibCount++;
+    document.getElementById('calib-count').textContent = `${calibCount} / 9`;
+
+    setTimeout(() => {
+      el.classList.add('hidden');
+      if (i + 1 < CALIB_POSITIONS.length) {
+        const next = document.getElementById(`calib-pt-${i + 1}`);
+        next.classList.remove('hidden');
+        document.getElementById(`pip-${i + 1}`).classList.add('active');
+      } else {
+        // Done!
+        setTimeout(startTracking, 500);
+      }
+    }, 400);
+  }
+
+  // ─── Timer ────────────────────────────────────────────
+  function formatTime(ms) {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // ─── Start WebGazer ──────────────────────────────────
+  function initWebGazer() {
+    const loading = document.getElementById('loading');
+
+    webgazer
+      .setRegression('ridge')
+      .setTracker('TFFacemesh')
+      .showPredictionPoints(false)
+      .showVideoPreview(true)
+      .showFaceOverlay(false)
+      .setGazeListener(onGaze);
+
+    webgazer.begin().then(() => {
+      loading.classList.add('hidden');
+      showToast('カメラ起動完了 — キャリブレーションを開始します');
+      buildCalibration();
+      showScreen('calibration');
+
+      // Viewport labels
+      document.getElementById('vp-w').textContent = window.innerWidth;
+      document.getElementById('vp-h').textContent = window.innerHeight;
+    }).catch(err => {
+      loading.classList.add('hidden');
+      showToast('⚠ カメラエラー: ' + err.message, 5000);
+      showScreen('welcome');
+    });
+  }
+
+  // ─── Start Tracking ───────────────────────────────────
+  function startTracking() {
+    trackingActive = true;
+    showScreen('tracking');
+
+    gazeDot.style.display = 'block';
+    document.getElementById('hud').style.display = 'flex';
+    document.getElementById('stop-btn').style.display = 'inline-flex';
+    document.getElementById('heatmap-btn').style.display = 'inline-flex';
+    document.getElementById('heatmap-canvas').style.display = 'block';
+
+    initHeatmap();
+    startTime = Date.now();
+
+    timerInterval = setInterval(() => {
+      document.getElementById('elapsed').textContent = formatTime(Date.now() - startTime);
+    }, 1000);
+
+    showToast('TRACKING ACTIVE — 視線追跡開始');
+  }
+
+  // ─── Gaze callback ───────────────────────────────────
+  function onGaze(data, elapsed) {
+    if (!data || !trackingActive) return;
+
+    const x = Math.round(data.x);
+    const y = Math.round(data.y);
+
+    gazeDot.style.left = x + 'px';
+    gazeDot.style.top  = y + 'px';
+
+    document.getElementById('gaze-x').textContent = x;
+    document.getElementById('gaze-y').textContent = y;
+
+    drawHeatmapPoint(x, y);
+  }
+
+  // ─── Stop ────────────────────────────────────────────
+  function stopTracking() {
+    trackingActive = false;
+    clearInterval(timerInterval);
+
+    webgazer.pause();
+    gazeDot.style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'none';
+    document.getElementById('heatmap-btn').style.display = 'none';
+
+    // Reset
+    calibCount = 0;
+    webgazer.clearData();
+    heatmapCtx && heatmapCtx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+    heatmapCanvas.style.display = 'none';
+    heatmapEnabled = false;
+
+    showScreen('welcome');
+  }
+
+  // ─── Heatmap toggle ──────────────────────────────────
+  document.getElementById('heatmap-btn').addEventListener('click', () => {
+    heatmapEnabled = !heatmapEnabled;
+    const btn = document.getElementById('heatmap-btn');
+    if (heatmapEnabled) {
+      btn.style.boxShadow = '0 0 12px rgba(255,184,0,0.7)';
+      showToast('ヒートマップ ON');
+    } else {
+      btn.style.boxShadow = '';
+      heatmapCtx && heatmapCtx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+      showToast('ヒートマップ OFF');
+    }
+  });
+
+  document.getElementById('stop-btn').addEventListener('click', stopTracking);
+
+  // ─── Start button ────────────────────────────────────
+  document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('loading').classList.remove('hidden');
+    showScreen(null); // hide all screens
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    initWebGazer();
+  });
+
+  // ─── Window resize ───────────────────────────────────
+  window.addEventListener('resize', () => {
+    if (trackingActive) {
+      initHeatmap();
+      document.getElementById('vp-w').textContent = window.innerWidth;
+      document.getElementById('vp-h').textContent = window.innerHeight;
+    }
+  });
+
+  // ─── Initial loading hide ────────────────────────────
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.getElementById('loading').classList.add('hidden');
+    }, 800);
+  });
+</script>
+</body>
+</html>
