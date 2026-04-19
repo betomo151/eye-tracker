@@ -245,7 +245,7 @@
 
   .calib-point {
     position: absolute;
-    width: 48px; height: 48px;
+    width: 80px; height: 80px;
     transform: translate(-50%, -50%);
     cursor: crosshair;
     display: flex;
@@ -258,17 +258,18 @@
 
   .calib-ring {
     position: absolute;
-    width: 48px; height: 48px;
-    border: 2px solid var(--cyan);
+    width: 80px; height: 80px;
+    border: 3px solid #00e5ff;
     border-radius: 50%;
     animation: pulse-ring 1.5s ease-in-out infinite;
+    box-shadow: 0 0 20px rgba(0,229,255,0.8);
   }
 
   .calib-core {
-    width: 12px; height: 12px;
-    background: var(--cyan);
+    width: 24px; height: 24px;
+    background: #00e5ff;
     border-radius: 50%;
-    box-shadow: var(--glow-cyan);
+    box-shadow: 0 0 20px rgba(0,229,255,1), 0 0 40px rgba(0,229,255,0.6);
     position: relative;
     z-index: 1;
     transition: transform 0.2s;
