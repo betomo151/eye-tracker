@@ -743,10 +743,11 @@
   makeDraggable();
 
   const CALIB_POSITIONS = [
-    [35, 10], [60, 10], [80, 10], [95, 10],
-    [35, 35], [60, 35], [80, 35], [95, 35],
-    [35, 60], [60, 60], [80, 60], [95, 60],
-    [35, 85], [60, 85], [80, 85], [95, 85],
+    [35, 3],  [55, 3],  [75, 3],  [92, 3],
+    [35, 12], [55, 12], [75, 12], [92, 12],
+    [35, 25], [55, 25], [75, 25], [92, 25],
+    [35, 55], [55, 55], [75, 55], [92, 55],
+    [35, 80], [55, 80], [75, 80], [92, 80],
   ];
 
   // ─── State ────────────────────────────────────────────
@@ -831,7 +832,7 @@
   function onOverlayClick(e) {
     const i = calibCount;
     calibCount++;
-    document.getElementById('calib-count').textContent = `${calibCount} / 9`;
+    document.getElementById('calib-count').textContent = `${calibCount} / ${CALIB_POSITIONS.length}`;
     document.getElementById(`pip-${i}`).classList.replace('active', 'done');
     if (i + 1 < CALIB_POSITIONS.length) {
       document.getElementById(`pip-${i + 1}`)?.classList.add('active');
