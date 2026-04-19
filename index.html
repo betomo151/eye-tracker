@@ -506,6 +506,19 @@
     box-shadow: var(--glow-cyan) !important;
     z-index: 9999 !important;
     border-radius: 0 !important;
+    cursor: grab !important;
+    user-select: none !important;
+  }
+  #webgazerVideoContainer:active { cursor: grabbing !important; }
+  #drag-hint {
+    position: fixed;
+    bottom: 68px;
+    right: 24px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    z-index: 9999;
+    pointer-events: none;
   }
 
   /* Loading overlay */
@@ -614,7 +627,7 @@
   <div class="calib-progress">
     <span style="font-size:9px;letter-spacing:3px;color:var(--dim)">CALIBRATION</span>
     <div class="calib-dots-row" id="calib-pips"></div>
-    <span id="calib-count" style="font-size:11px">0 / 9</span>
+    <span id="calib-count" style="font-size:11px">0 / 16</span>
   </div>
 
   <div id="calib-overlay">
@@ -691,10 +704,49 @@
   // ─── Config ───────────────────────────────────────────
   window.saveDataAcrossSessions = false;
 
+  // ─── Draggable camera ─────────────────────────────────
+  function makeDraggable() {
+    const el = document.getElementById('webgazerVideoContainer');
+    if (!el) { setTimeout(makeDraggable, 500); return; }
+
+    // Add drag hint
+    const hint = document.createElement('div');
+    hint.id = 'drag-hint';
+    hint.textContent = '⠿ DRAG TO MOVE';
+    document.body.appendChild(hint);
+
+    let dragging = false, ox = 0, oy = 0;
+
+    el.addEventListener('mousedown', e => {
+      dragging = true;
+      ox = e.clientX - el.getBoundingClientRect().left;
+      oy = e.clientY - el.getBoundingClientRect().top;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const x = e.clientX - ox;
+      const y = e.clientY - oy;
+      el.style.setProperty('left', x + 'px', 'important');
+      el.style.setProperty('top', y + 'px', 'important');
+      el.style.setProperty('right', 'auto', 'important');
+      el.style.setProperty('bottom', 'auto', 'important');
+      hint.style.left = x + 'px';
+      hint.style.top = (y + el.offsetHeight + 4) + 'px';
+      hint.style.right = 'auto';
+      hint.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => { dragging = false; });
+  }
+  makeDraggable();
+
   const CALIB_POSITIONS = [
-    [60, 15], [85, 15], [85, 50],
-    [85, 85], [60, 85], [40, 85],
-    [40, 50], [60, 50], [72, 35],
+    [35, 10], [60, 10], [80, 10], [95, 10],
+    [35, 35], [60, 35], [80, 35], [95, 35],
+    [35, 60], [60, 60], [80, 60], [95, 60],
+    [35, 85], [60, 85], [80, 85], [95, 85],
   ];
 
   // ─── State ────────────────────────────────────────────
