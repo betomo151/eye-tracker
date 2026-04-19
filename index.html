@@ -684,30 +684,6 @@
 <!-- Heatmap canvas -->
 <canvas id="heatmap-canvas"></canvas>
 
-<!-- MediaPipe assets redirect: fetch & XHR を CDN にリダイレクト -->
-<script>
-  const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/';
-
-  // fetch を上書き
-  const _origFetch = window.fetch;
-  window.fetch = function(url, ...args) {
-    if (typeof url === 'string' && url.includes('mediapipe/face_mesh')) {
-      const filename = url.split('/').pop();
-      url = MEDIAPIPE_CDN + filename;
-    }
-    return _origFetch(url, ...args);
-  };
-
-  // XMLHttpRequest を上書き
-  const _origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    if (typeof url === 'string' && url.includes('mediapipe/face_mesh')) {
-      const filename = url.split('/').pop();
-      url = MEDIAPIPE_CDN + filename;
-    }
-    return _origOpen.call(this, method, url, ...rest);
-  };
-</script>
 <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
 
 <script>
@@ -824,7 +800,7 @@
 
     webgazer
       .setRegression('ridge')
-      .setTracker('TFFacemesh')
+      .setTracker('clmTracker')
       .showPredictionPoints(false)
       .showVideoPreview(true)
       .showFaceOverlay(false)
