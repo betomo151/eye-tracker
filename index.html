@@ -575,6 +575,43 @@
   }
   #toast.hidden { opacity: 0; }
 
+
+  /* Validation target */
+  .val-target {
+    position: absolute;
+    width: 60px; height: 60px;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .val-ring {
+    position: absolute;
+    width: 60px; height: 60px;
+    border: 2px solid var(--amber);
+    border-radius: 50%;
+    animation: pulse-ring 1s ease-in-out infinite;
+    box-shadow: 0 0 15px rgba(255,184,0,0.5);
+  }
+  .val-core {
+    width: 16px; height: 16px;
+    background: var(--amber);
+    border-radius: 50%;
+    box-shadow: 0 0 15px rgba(255,184,0,1);
+  }
+  /* Result table */
+  .result-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  .result-table th { font-size:9px; letter-spacing:3px; color:var(--dim); padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  .result-table td { font-size:13px; color:var(--text); padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.04); font-family:'Share Tech Mono',monospace; }
+  .result-stat { display:flex; gap:24px; margin-bottom:20px; flex-wrap:wrap; }
+  .result-stat-item { flex:1; min-width:120px; background:var(--surface); border:1px solid var(--border); padding:16px; }
+  .result-stat-label { font-size:9px; letter-spacing:3px; color:var(--dim); margin-bottom:8px; }
+  .result-stat-val { font-family:'Orbitron',sans-serif; font-size:24px; font-weight:700; }
+  .good { color: var(--green); text-shadow: var(--glow-green); }
+  .ok   { color: var(--amber); }
+  .bad  { color: var(--red); }
+
   /* elapsed timer */
   #elapsed {
     font-family: 'Orbitron', sans-serif;
@@ -686,6 +723,35 @@
   <button class="btn" id="heatmap-btn" style="border-color:var(--amber);color:var(--amber)">
     ◈ HEATMAP
   </button>
+</div>
+
+
+<!-- ─── VALIDATION SCREEN ─── -->
+<div class="screen hidden" id="validation">
+  <div id="val-overlay" style="position:fixed;inset:0;z-index:50;background:rgba(4,4,10,0.95);"></div>
+  <div id="val-progress" style="position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:16px;background:rgba(4,4,10,0.9);border:1px solid rgba(255,184,0,0.3);padding:12px 24px;font-size:12px;letter-spacing:2px;color:var(--amber);">
+    <span style="font-size:9px;letter-spacing:3px;color:var(--dim)">VALIDATION</span>
+    <span id="val-count">0 / 9</span>
+  </div>
+  <div id="val-timer-bar-wrap" style="position:fixed;top:68px;left:50%;transform:translateX(-50%);width:200px;height:3px;background:rgba(255,184,0,0.1);z-index:100;">
+    <div id="val-timer-bar" style="height:100%;width:0%;background:var(--amber);transition:width 0.1s linear;"></div>
+  </div>
+  <div style="position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:100;font-size:12px;letter-spacing:2px;color:var(--dim);text-align:center;">
+    ターゲットを見つめてください — 2秒で自動記録
+  </div>
+</div>
+
+<!-- ─── RESULT SCREEN ─── -->
+<div class="screen hidden" id="result">
+  <div class="welcome-inner" style="max-width:640px;">
+    <div class="tag">VALIDATION RESULT</div>
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:28px;color:#fff;margin-bottom:24px;letter-spacing:-1px;">精度レポート</h2>
+    <div id="result-content"></div>
+    <div style="display:flex;gap:12px;margin-top:32px;flex-wrap:wrap;">
+      <button class="btn" id="retry-btn">↺ 再キャリブレーション</button>
+      <button class="btn" id="start-tracking-btn" style="border-color:var(--green);color:var(--green);">▶ トラッキング開始</button>
+    </div>
+  </div>
 </div>
 
 <!-- Gaze dot -->
@@ -841,7 +907,7 @@
       const old = document.getElementById('current-calib-pt');
       if (old) old.remove();
       document.getElementById('calib-overlay').removeEventListener('click', onOverlayClick);
-      setTimeout(startTracking, 500);
+      setTimeout(startValidation, 500);
     }
   }
 
@@ -915,6 +981,135 @@
     document.getElementById('gaze-y').textContent = y;
 
     drawHeatmapPoint(x, y);
+    if (valIndex >= 0 && valGazeSamples !== undefined) valGazeSamples.push({x, y});
+  }
+
+
+  // ─── Validation ──────────────────────────────────────
+  const VAL_POSITIONS = [
+    [15, 15], [50, 15], [85, 15],
+    [15, 50], [50, 50], [85, 50],
+    [15, 85], [50, 85], [85, 85],
+  ];
+  const VAL_DURATION = 2000; // ms per point
+  let valIndex = 0;
+  let valResults = [];
+  let valGazeSamples = [];
+  let valTimer = null;
+  let valBarTimer = null;
+
+  function startValidation() {
+    valIndex = 0;
+    valResults = [];
+    showScreen('validation');
+    gazeDot.style.display = 'block';
+    trackingActive = true;
+    showValPoint(0);
+  }
+
+  function showValPoint(i) {
+    const overlay = document.getElementById('val-overlay');
+    // Remove old target
+    const old = document.getElementById('val-target');
+    if (old) old.remove();
+
+    document.getElementById('val-count').textContent = `${i} / ${VAL_POSITIONS.length}`;
+
+    const pos = VAL_POSITIONS[i];
+    const target = document.createElement('div');
+    target.className = 'val-target';
+    target.id = 'val-target';
+    target.style.left = `${pos[0]}%`;
+    target.style.top = `${pos[1]}%`;
+    target.innerHTML = `<div class="val-ring"></div><div class="val-core"></div>`;
+    overlay.appendChild(target);
+
+    // Reset timer bar
+    const bar = document.getElementById('val-timer-bar');
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    setTimeout(() => {
+      bar.style.transition = `width ${VAL_DURATION}ms linear`;
+      bar.style.width = '100%';
+    }, 50);
+
+    // Collect gaze samples
+    valGazeSamples = [];
+    valTimer = setTimeout(() => recordValPoint(i), VAL_DURATION);
+  }
+
+  function recordValPoint(i) {
+    const pos = VAL_POSITIONS[i];
+    const targetX = (pos[0] / 100) * window.innerWidth;
+    const targetY = (pos[1] / 100) * window.innerHeight;
+
+    // Average gaze samples
+    if (valGazeSamples.length > 0) {
+      const avgX = valGazeSamples.reduce((s, p) => s + p.x, 0) / valGazeSamples.length;
+      const avgY = valGazeSamples.reduce((s, p) => s + p.y, 0) / valGazeSamples.length;
+      const err = Math.sqrt((avgX - targetX) ** 2 + (avgY - targetY) ** 2);
+      valResults.push({ targetX, targetY, predX: avgX, predY: avgY, error: err });
+    }
+
+    const next = i + 1;
+    if (next < VAL_POSITIONS.length) {
+      valIndex = next;
+      showValPoint(next);
+    } else {
+      showValidationResult();
+    }
+  }
+
+  function showValidationResult() {
+    trackingActive = false;
+    gazeDot.style.display = 'none';
+
+    const errors = valResults.map(r => r.error);
+    const mean = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const max = Math.max(...errors);
+    const within50 = errors.filter(e => e <= 50).length;
+    const within100 = errors.filter(e => e <= 100).length;
+    const accuracy = Math.round((within50 / errors.length) * 100);
+
+    const grade = mean < 60 ? 'good' : mean < 120 ? 'ok' : 'bad';
+    const gradeText = mean < 60 ? '良好' : mean < 120 ? '普通' : '要改善';
+
+    const rows = valResults.map((r, i) => {
+      const cls = r.error < 60 ? 'good' : r.error < 120 ? 'ok' : 'bad';
+      return `<tr>
+        <td>Point ${i + 1}</td>
+        <td>(${Math.round(r.targetX)}, ${Math.round(r.targetY)})</td>
+        <td>(${Math.round(r.predX)}, ${Math.round(r.predY)})</td>
+        <td class="${cls}">${Math.round(r.error)}px</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('result-content').innerHTML = `
+      <div class="result-stat">
+        <div class="result-stat-item">
+          <div class="result-stat-label">平均誤差</div>
+          <div class="result-stat-val ${grade}">${Math.round(mean)}px</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">最大誤差</div>
+          <div class="result-stat-val ok">${Math.round(max)}px</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">精度 (50px以内)</div>
+          <div class="result-stat-val ${grade}">${accuracy}%</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">総合評価</div>
+          <div class="result-stat-val ${grade}">${gradeText}</div>
+        </div>
+      </div>
+      <table class="result-table">
+        <thead><tr><th>POINT</th><th>TARGET</th><th>PREDICTED</th><th>ERROR</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    showScreen('result');
   }
 
   // ─── Stop ────────────────────────────────────────────
@@ -960,6 +1155,21 @@
     showScreen(null); // hide all screens
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     initWebGazer();
+  });
+
+  // ─── Result buttons ──────────────────────────────────
+  document.getElementById('retry-btn').addEventListener('click', () => {
+    trackingActive = false;
+    gazeDot.style.display = 'none';
+    calibCount = 0;
+    valIndex = 0;
+    webgazer.clearData();
+    buildCalibration();
+    showScreen('calibration');
+  });
+
+  document.getElementById('start-tracking-btn').addEventListener('click', () => {
+    startTracking();
   });
 
   // ─── Window resize ───────────────────────────────────
